@@ -185,12 +185,19 @@ describe Chef::Provider::RemoteFile, "do_remote_file" do
 
   end
   
-  it "should set the new resource to updated" do
-    @resource.should_receive(:updated=).with(true)    
+  it "should not set the new resource to updated if checksums match" do
+		@resource.should_not_receive(:updated=).with(true)
+    do_remote_file
+  end
+  
+  it "should set the new resource to updated if things changed" do
+    @resource.should_receive(:updated=).with(true)
+    @provider.current_resource.checksum("nomatch")
     do_remote_file
   end
   
   it "should copy the raw file to the new resource" do
+    @provider.current_resource.checksum("nomatch")
     FileUtils.should_receive(:cp).with(@tempfile.path, @resource.path).and_return(true)    
     do_remote_file
   end
@@ -214,6 +221,7 @@ describe Chef::Provider::RemoteFile, "do_remote_file" do
   end
   
   it "should close the file when done" do
+    @provider.current_resource.checksum("nomatch")
     @tempfile.should_receive(:close)
     do_remote_file
   end

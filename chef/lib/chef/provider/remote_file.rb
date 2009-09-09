@@ -53,27 +53,28 @@ class Chef
             raw_file = get_from_uri(source)    ||
                        get_from_server(source, @current_resource.checksum) ||
                        get_from_local_cookbook(source)
+            @new_resource.checksum(self.checksum(raw_file.path))
 
-            # If the file exists
-            if ::File.exists?(@new_resource.path)
-              # And it matches the checksum of the raw file
-              @new_resource.checksum(self.checksum(raw_file.path))
-              if @new_resource.checksum != @current_resource.checksum
+            if @new_resource.checksum == @current_resource.checksum
+              Chef::Log.debug("File #{@new_resouce} unchanged, not updating")
+            else
+              # If the file exists
+              if ::File.exists?(@new_resource.path)
                 # Updating target file, let's perform a backup!
                 Chef::Log.debug("#{@new_resource} changed from #{@current_resource.checksum} to #{@new_resource.checksum}")
                 Chef::Log.info("Updating #{@new_resource} at #{@new_resource.path}")
                 backup(@new_resource.path)
+              else
+                # We're creating a new file
+                Chef::Log.info("Creating #{@new_resource} at #{@new_resource.path}")
               end
-            else
-              # We're creating a new file
-              Chef::Log.info("Creating #{@new_resource} at #{@new_resource.path}")
+
+              FileUtils.cp(raw_file.path, @new_resource.path)
+              @new_resource.updated = true
+
+              # We're done with the file, so make sure to close it if it was open.
+              raw_file.close unless raw_file.closed?
             end
-
-            FileUtils.cp(raw_file.path, @new_resource.path)
-            @new_resource.updated = true
-
-            # We're done with the file, so make sure to close it if it was open.
-            raw_file.close unless raw_file.closed?
           rescue Net::HTTPRetriableError => e
             if e.response.kind_of?(Net::HTTPNotModified)
               Chef::Log.debug("File #{path} is unchanged")
